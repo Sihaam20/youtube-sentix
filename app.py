@@ -1,0 +1,429 @@
+from flask import Flask, render_template, request, redirect, url_for, send_file, session
+import os
+import json
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from textblob import TextBlob
+import networkx as nx
+from wordcloud import WordCloud, STOPWORDS
+#from wordcloud.tokenization import unigrams_and_bigrams_from_text, process_tokens
+import matplotlib.pyplot as plt
+from PIL import Image
+import emoji 
+
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+from langdetect import detect, LangDetectException
+import re
+import textwrap
+import urllib.parse
+import requests
+
+
+
+# Set up the YouTube Data API client
+DEVELOPER_KEY = 'AIzaSyDYi0hx3ReDAlCz3GXom7hyj8t0vvjWcKs'
+YOUTUBE_API_SERVICE_NAME = 'youtube'
+YOUTUBE_API_VERSION = 'v3'
+youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=DEVELOPER_KEY)
+
+# Specify the directory path to save the image
+image_directory = os.path.join(os.getcwd(), 'static', 'images')
+
+# Create the image directory if it doesn't exist
+os.makedirs(image_directory, exist_ok=True)
+
+
+def extract_video_id(url):
+    query = urllib.parse.urlparse(url)
+    if query.hostname == 'youtu.be':
+        return query.path[1:]
+    if query.hostname in ('www.youtube.com', 'youtube.com'):
+        if query.path == '/watch':
+            p = urllib.parse.parse_qs(query.query)
+            return p['v'][0]
+        if query.path[:7] == '/embed/':
+            return query.path.split('/')[2]
+        if query.path[:3] == '/v/':
+            return query.path.split('/')[2]
+    raise ValueError('Invalid YouTube URL or unable to extract video ID.')
+
+
+def get_comments(video_id):
+    try:
+        # Retrieve the comments for the specified video
+        response = youtube.commentThreads().list(
+            part='snippet',
+            videoId=video_id,
+            textFormat='plainText',
+            maxResults=200,  # Adjust this value to retrieve more comments if needed
+        ).execute()
+
+        comments = []
+        for item in response['items']:
+            comment = item['snippet']['topLevelComment']['snippet']['textDisplay']
+            comments.append(comment)
+
+        return comments
+    except HttpError as e:
+        print(f'An error occurred: {e}')
+        return []
+
+
+def is_positive(comment):
+    positive_words = ["good", "great", "excellent", "nice", "super", "fabulous", "smooth", "best", "love", "fantastic",
+                      "wow", "amazing", "promising","fantabulous"]
+    blob = TextBlob(comment)
+    polarity = blob.sentiment.polarity
+    return polarity > 0 and any(word in comment.lower() for word in positive_words)
+
+
+def is_negative(comment):
+    negative_words = ["bad", "poor", "terrible", "worst", "damage", "flop", "waste", "waste of money", "dont buy",
+                      "horrible", "failure", "bullshit", "hell", "not available", "repair", "avoid", "cheap",
+                      "issue", "never", "error", "scam"]
+    blob = TextBlob(comment)
+    polarity = blob.sentiment.polarity
+    return polarity < 0 and any(word in comment.lower() for word in negative_words)
+
+
+def is_question(comment):
+    question_words = ["how", "where", "what", "when", "?", "who"]
+    return any(word.lower() in comment.lower() for word in question_words)
+
+
+def save_comments(hashtag, comments):
+    positive_comments = []
+    negative_comments = []
+    question_comments = []
+    neutral_comments = []
+
+    positive_words = ["good", "great", "excellent", "nice", "super", "fabulous", "smooth", "best", "love", "fantastic",
+                      "wow", "amazing", "promising","Marvelous","Beautiful","Awesome",""]
+    negative_words = ["bad", "poor", "terrible", "worst", "damage", "flop", "waste", "waste of money", "dont buy",
+                      "horrible", "failure", "bullshit", "hell", "not available", "repair", "avoid", "cheap","Hate"
+                      "issue", "never", "error", "scam"]
+    question_words = ["how", "where", "what", "when", "?", "who"]
+
+    unique_comments = set()  # Store unique comments to remove duplicates
+
+    for comment in comments:
+        try:
+            # Remove special characters from the comment using regular expressions
+            comment = re.sub(r'[^\w\s]', '', comment)
+
+            # Detect the language of the comment
+            language = detect(comment)
+
+            # Filter comments that are not in English
+            if language != 'en':
+                continue
+
+            # Perform sentiment analysis
+            blob = TextBlob(comment)
+            polarity = blob.sentiment.polarity
+
+            if polarity > 0 and any(word in comment.lower() for word in positive_words):
+                positive_comments.append((comment, polarity))
+            elif polarity < 0 and any(word in comment.lower() for word in negative_words):
+                negative_comments.append((comment, polarity))
+            elif any(word.lower() in comment.lower() for word in question_words):
+                question_comments.append((comment, polarity))
+            else:
+                neutral_comments.append((comment, polarity))
+
+            # Add comment to unique comments set
+            unique_comments.add(comment)
+
+        except LangDetectException:
+            continue
+
+    # Convert unique comments set back to a list
+    unique_comments = list(unique_comments)
+
+    # Sort the comments based on polarity
+    positive_comments.sort(key=lambda x: x[1], reverse=True)
+    negative_comments.sort(key=lambda x: x[1])
+    neutral_comments.sort(key=lambda x: x[1])
+    question_comments.sort(key=lambda x: x[1])
+
+    filename_positive = f'{hashtag}_positive_comments.txt'
+    filename_negative = f'{hashtag}_negative_comments.txt'
+    filename_question = f'{hashtag}_question_comments.txt'
+    filename_neutral = f'{hashtag}_neutral_comments.txt'
+
+    with open(filename_positive, 'w', encoding='utf-8') as file:
+        file.write('\n'.join([f'{comment[0]} (Polarity: {comment[1]})' for comment in positive_comments]))
+
+    with open(filename_negative, 'w', encoding='utf-8') as file:
+        file.write('\n'.join([f'{comment[0]} (Polarity: {comment[1]})' for comment in negative_comments]))
+
+    with open(filename_question, 'w', encoding='utf-8') as file:
+        file.write('\n'.join([f'{comment[0]} (Polarity: {comment[1]})' for comment in question_comments]))
+
+    with open(filename_neutral, 'w', encoding='utf-8') as file:
+        file.write('\n'.join([f'{comment[0]} (Polarity: {comment[1]})' for comment in neutral_comments]))
+
+    print(f'Successfully saved {len(positive_comments)} positive comments to {filename_positive}.')
+    print(f'Successfully saved {len(negative_comments)} negative comments to {filename_negative}.')
+    print(f'Successfully saved {len(question_comments)} question comments to {filename_question}.')
+    print(f'Successfully saved {len(neutral_comments)} neutral comments to {filename_neutral}.')
+
+    create_knowledge_graph(hashtag, len(positive_comments), len(negative_comments), len(neutral_comments),
+                           len(question_comments), len(unique_comments), unique_comments)  # Pass total_comments_count
+
+
+question_words = ["how", "where", "what", "when", "?", "who"]
+
+
+def create_knowledge_graph(hashtag, positive_count, negative_count, neutral_count, question_count,
+                           total_comments_count,
+                           comments):
+    # Remove special characters from comments using regular expressions
+    comments = [re.sub(r'[^\w\s]', '', comment) for comment in comments]
+
+    # Create a graph
+    graph = nx.DiGraph()
+
+    # Add the sentiment nodes with count information
+    graph.add_node('Positive', count=positive_count)
+    graph.add_node('Negative', count=negative_count)
+    graph.add_node('Neutral', count=neutral_count)
+    graph.add_node('Questions', count=question_count)
+
+    if total_comments_count > 0:
+        graph.add_node('Total Comments', count=total_comments_count)
+        # Add edge from the parent node to the total comments node
+        graph.add_edge(hashtag, 'Total Comments', weight=total_comments_count)
+
+    else:
+        graph.add_node(hashtag, count=total_comments_count)  # Add the parent node with total comments count
+        # Add edges from the parent node to sentiment nodes
+        graph.add_edge(hashtag, 'Positive', weight=positive_count)
+        graph.add_edge(hashtag, 'Negative', weight=negative_count)
+        graph.add_edge(hashtag, 'Neutral', weight=neutral_count)
+        graph.add_edge(hashtag, 'Questions', weight=question_count)
+
+    graph.add_node(hashtag, count=total_comments_count)  # Add the parent node with total comments count
+
+    # Add edges from the parent node to sentiment nodes
+    graph.add_edge(hashtag, 'Positive', weight=positive_count)
+    graph.add_edge(hashtag, 'Negative', weight=negative_count)
+    graph.add_edge(hashtag, 'Neutral', weight=neutral_count)
+    graph.add_edge(hashtag, 'Questions', weight=question_count)
+
+    # Add subnodes to sentiment nodes
+    sentiment_nodes = ['Positive', 'Negative', 'Neutral', 'Questions']
+    subnode_colors = ['palegreen', 'lightcoral', 'lightblue', 'lightyellow']
+
+    for i, sentiment in enumerate(sentiment_nodes):
+        sentiment_comments = set()  # Store comments for each sentiment to remove duplicates
+
+        if sentiment == 'Positive':
+            sentiment_comments = {comment for comment in comments if TextBlob(comment).sentiment.polarity > 0}
+        elif sentiment == 'Negative':
+            sentiment_comments = {comment for comment in comments if TextBlob(comment).sentiment.polarity < 0}
+        elif sentiment == 'Neutral':
+            sentiment_comments = {comment for comment in comments if TextBlob(comment).sentiment.polarity == 0}
+        elif sentiment == 'Questions':
+            sentiment_comments = {comment for comment in comments if
+                                   any(word.lower() in comment.lower() for word in question_words)}
+
+        subnode_comments = list(sentiment_comments)[:3]  # Get the first three comments for each sentiment
+
+        for j, comment in enumerate(subnode_comments):
+            subnode_label = f'{sentiment}_sub{j}'
+            truncated_comment = textwrap.shorten(comment, width=95, placeholder='...')
+            graph.add_node(subnode_label, label=truncated_comment)
+            graph.add_edge(sentiment, subnode_label, weight=1)
+
+    # Draw the graph
+    pos = nx.spring_layout(graph, k=1.3)  # Adjust 'k' value to control the node spacing
+    node_colors = ['lightgreen', 'lightcoral', 'lightskyblue', 'lightyellow', 'lightgray']  # Add a color for the parent node
+
+    # Draw the sentiment nodes and subnodes
+    for i, node in enumerate(sentiment_nodes):
+        nx.draw_networkx_nodes(graph, pos, nodelist=[node], node_color=node_colors[i], node_size=1500, alpha=0.8)
+
+        # Draw the subnodes
+        subnodes = [n for n in graph.nodes if node in n and 'sub' in n]
+        nx.draw_networkx_nodes(graph, pos, nodelist=subnodes, node_color=subnode_colors[i], node_size=1000, alpha=0.8)
+
+    # Draw the parent node
+    nx.draw_networkx_nodes(graph, pos, nodelist=[hashtag], node_color=node_colors[-1], node_size=1500, alpha=0.8)
+
+    # Draw the edges
+    nx.draw_networkx_edges(graph, pos, width=1.0, alpha=0.5, arrowsize=10)
+
+    # Add labels to nodes
+    labels = {node: graph.nodes[node].get('label', f"{node} ({graph.nodes[node].get('count', 0)})") for node in
+              graph.nodes}
+    nx.draw_networkx_labels(graph, pos, labels=labels, font_size=8, font_weight='bold')
+
+    # Set the plot title
+    plt.title(f'Knowledge Graph for Hashtag: {hashtag}')
+
+    # Save the plot as a PNG image
+    filename = os.path.join(image_directory, f'{hashtag}_knowledge_graph.png')
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(filename)
+    print(f'Successfully saved the knowledge graph as {filename}.')
+    plt.show()
+
+
+def generate_pie_chart(comments, hashtag, positive_count, negative_count, question_count, neutral_count):
+    # Define custom colors for each slice
+    colors = ['#ff9999', '#66b3ff', '#99ff99', '#c2c2f0']
+
+    # Create a pie chart
+    plt.figure(figsize=(8, 8))
+    explode = (0.1, 0, 0, 0)
+    labels = ['Positive', 'Negative', 'Question', 'Neutral']
+    sizes = [positive_count, negative_count, question_count, neutral_count]
+    plt.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%', startangle=140, shadow=True, wedgeprops={'edgecolor': 'gray'})
+    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+
+    # Set the title and save the figure
+    plt.title(f'Sentiment Distribution: {hashtag}')
+
+    filename = os.path.join(image_directory, f'{hashtag}_Pie_chart.png')
+    plt.tight_layout()
+    plt.savefig(filename)
+    print(f'Successfully saved the enhanced pie chart as {filename}.')
+    plt.show()
+
+def generate_word_cloud(comments, hashtag):
+    combined_comments = ' '.join(comments)
+    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(combined_comments)
+
+    plt.figure(figsize=(10, 5))
+    plt.title(f'Word Cloud for Hashtag: {hashtag}') 
+    plt.imshow(wordcloud, interpolation='bilinear')
+
+    # Save the plot as a PNG image
+    filename = f'{hashtag}_Word_Cloud.png'
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(filename)
+    print(f'Successfully saved the Word Cloud as {filename}.')
+    plt.show()  # Display the word cloud
+
+
+
+
+
+# Set up the Flask app
+app = Flask(__name__, static_folder='static', static_url_path='/static')
+app.secret_key = '737fde0f5e51686b2099cd6efa2b5c90b2ad359b78727152'
+
+
+# Define the route for the home page
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        # Get the user input from the form
+        user_input = request.form['hashtag_or_link']
+
+        # Determine whether the input is a hashtag or a video link
+        if user_input.startswith('#'):
+            # Handle hashtag input
+            hashtag = user_input[1:] 
+            session['hashtag'] = hashtag  # Remove the '#' character
+            # Handle searching for videos based on the hashtag
+            try:
+                # Search for videos based on the hashtag
+                response = youtube.search().list(
+                    part='id',
+                    q=hashtag,
+                    type='video',
+                    maxResults=10,
+                ).execute()
+
+                video_ids = [item['id']['videoId'] for item in response['items']]
+                all_comments = []
+
+                for video_id in video_ids:
+                    comments = get_comments(video_id)
+                    all_comments.extend(comments)
+
+                # Calculate counts for the pie chart
+                positive_count = len([comment for comment in all_comments if is_positive(comment)])
+                negative_count = len([comment for comment in all_comments if is_negative(comment)])
+                question_count = len([comment for comment in all_comments if is_question(comment)])
+                neutral_count = len(all_comments) - (positive_count + negative_count + question_count)
+
+                save_comments(hashtag, all_comments)
+
+                # Generate and display the word cloud
+                generate_word_cloud(all_comments, hashtag)
+
+                # Generate and display the pie chart
+                generate_pie_chart(all_comments, hashtag, positive_count, negative_count, question_count, neutral_count)
+
+            except HttpError as e:
+                print(f'An error occurred: {e}')
+        else:
+            # Handle video link input
+            video_id = extract_video_id(user_input)
+            if video_id:
+                comments = get_comments(video_id)
+                save_comments(video_id, comments)
+
+                # Calculate counts for the pie chart
+                positive_count = len([comment for comment in comments if is_positive(comment)])
+                negative_count = len([comment for comment in comments if is_negative(comment)])
+                question_count = len([comment for comment in comments if is_question(comment)])
+                neutral_count = len(comments) - (positive_count + negative_count + question_count)
+
+                # Generate and display the word cloud
+                generate_word_cloud(comments, video_id)
+
+                # Generate and display the pie chart
+                generate_pie_chart(comments, video_id, positive_count, negative_count, question_count, neutral_count)
+            else:
+                print('Invalid video link.')
+        return redirect(url_for('results'))
+    return render_template('index.html')
+
+@app.route('/results')
+def results():
+    hashtag = session.get('hashtag', None)
+
+    if hashtag is None:
+        # Handle the case where 'hashtag' is not found in the session
+        # You can render an error message or redirect to the home page
+        return redirect(url_for('index'))
+
+    # Modify these lines in your app.py file
+    knowledge_graph_url = url_for('static', filename=f'images/{hashtag}_knowledge_graph.png')
+    word_cloud_url = url_for('static', filename=f'images/{hashtag}_Word_Cloud.png')
+    pie_chart_url = url_for('static', filename=f'images/{hashtag}_Pie_chart.png')
+
+    return render_template('results.html',
+                           knowledge_graph_url=knowledge_graph_url,
+                           word_cloud_url=word_cloud_url,
+                           pie_chart_url=pie_chart_url,
+                           knowledge_graph_download_url=url_for('download', filename='knowledge_graph.png'),
+                           word_cloud_download_url=url_for('download', filename='word_cloud.png'),
+                           pie_chart_download_url=url_for('download', filename='pie_chart.png'))
+
+
+@app.route('/download/<filename>')
+def download(filename):
+    # Specify the full path to the images directory
+    directory = os.path.join(app.root_path, 'static', 'images')
+    file_path = os.path.join(directory, filename)
+    
+    # Print the absolute path for debugging
+    print(f'File path: {file_path}')
+    
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    else:
+        return "File not found."
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
