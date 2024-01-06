@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Results Page</title>
+</head>
+<body>
+    <h1>Results Page</h1>
+    
+    <!-- Display Knowledge Graph Image -->
+<img src="/static/{{ knowledge_graph_url }}" alt="Knowledge Graph">
+
+<!-- Display Word Cloud Image -->
+<img src="/static/{{ word_cloud_url }}" alt="Word Cloud">
+
+<!-- Display Pie Chart Image -->
+<img src="/static/{{ pie_chart_url }}" alt="Pie Chart">
+
+    
+   <!-- Provide download links for images -->
+<p><a href="/static/{{ knowledge_graph_download_url }}" download>Download Knowledge Graph</a></p>
+<p><a href="/static/{{ word_cloud_download_url }}" download>Download Word Cloud</a></p>
+<p><a href="/static/{{ pie_chart_download_url }}" download>Download Pie Chart</a></p>
+
+</body>
+</html>

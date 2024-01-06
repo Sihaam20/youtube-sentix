@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Results Page</title>
+    <style>
+        .comments-section {
+            margin-bottom: 20px;
+        }
+        .word-cloud-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .word-cloud-img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Results Page</h1>
+
+    <div class="comments-section">
+        <h2>Comments</h2>
+        <div>
+            <h3>Positive Comments</h3>
+            <ul>
+                {% for comment in positive_comments_saved %}
+                    <li>{{ comment }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div>
+            <h3>Negative Comments</h3>
+            <ul>
+                {% for comment in negative_comments_saved %}
+                    <li>{{ comment }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div>
+            <h3>Question Comments</h3>
+            <ul>
+                {% for comment in question_comments_saved %}
+                    <li>{{ comment }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div>
+            <h3>Neutral Comments</h3>
+            <ul>
+                {% for comment in neutral_comments_saved %}
+                    <li>{{ comment }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    <!-- Add this section to display the summarized comments -->
+     
+
+    <div class="word-cloud-section">
+        <h2>Word Cloud</h2>
+        <img src="{{ word_cloud_url }}" alt="Word Cloud" class="word-cloud-img">
+        <p><a href="{{ word_cloud_download_url }}" download>Download Word Cloud</a></p>
+    </div>
+</body>
+</html>
