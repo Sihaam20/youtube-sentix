@@ -4,50 +4,141 @@
     <meta charset="UTF-8">
     <title>Results Page</title>
     <style>
-        .comments-section {
-            margin-bottom: 20px;
+        /* Reset default margin and padding */
+        body, ul {
+            margin: 0;
+            padding: 0;
         }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f2f2f2;
+        }
+
+        /* Main heading style */
+        h1 {
+            text-align: center;
+            color: #df1111;
+            margin-top: 20px;
+            font-size: 36px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Section headings */
+        h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 5px;
+        }
+
+        /* List item style */
+        li {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        /* List item hover effect */
+        li:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Different background colors for comment categories */
+        .positive {
+            background-color: #cadebc; /* Light green */
+        }
+
+        .negative {
+            background-color: #ffb3b3; /* Light red */
+        }
+
+        .question {
+            background-color: #b3d1ff; /* Light blue */
+        }
+
+        /* Word cloud section */
         .word-cloud-section {
             text-align: center;
-            margin-bottom: 20px;
+            margin: 20px;
         }
+
+        /* Word cloud image style */
         .word-cloud-img {
             max-width: 100%;
             height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        /* Word cloud image hover effect */
+        .word-cloud-img:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Download link style */
+        .word-cloud-section a {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff; /* Blue */
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Download link hover effect */
+        .word-cloud-section a:hover {
+            background-color: #0056b3; /* Dark blue on hover */
         }
     </style>
 </head>
 <body>
-    <h1>Results Page</h1>
-
+    <h3>The comments are extracted and categorized as follows</h3>
+    <div class="word-cloud-section">
+        <h2>Word Cloud</h2>
+        <img src="{{ word_cloud_url }}" alt="Word Cloud" class="word-cloud-img">
+        <p><a href="{{ word_cloud_download_url }}" download>Download Word Cloud</a></p>
+    </div>
     <div class="comments-section">
-        <h2>Comments</h2>
+        <h1>Comments</h1>
         <div>
-            <h3>Positive Comments</h3>
+            <h2 id="positive-comments-heading">Positive Comments😄</h2>
             <ul>
                 {% for comment in positive_comments_saved %}
-                    <li>{{ comment }}</li>
+                    <li class="positive">{{ comment }}</li>
                 {% endfor %}
             </ul>
         </div>
         <div>
-            <h3>Negative Comments</h3>
+            <h2 id="negative-comments-heading">Negative Comments☹️</h2>
             <ul>
                 {% for comment in negative_comments_saved %}
-                    <li>{{ comment }}</li>
+                    <li class="negative">{{ comment }}</li>
                 {% endfor %}
             </ul>
         </div>
         <div>
-            <h3>Question Comments</h3>
+            <h2 id="question-comments-heading">Question Comments🤔💭</h2>
             <ul>
                 {% for comment in question_comments_saved %}
-                    <li>{{ comment }}</li>
+                    <li class="question">{{ comment }}</li>
                 {% endfor %}
             </ul>
         </div>
         <div>
-            <h3>Neutral Comments</h3>
+            <h2 id="neutral-comments-heading">Neutral Comments😐</h2>
             <ul>
                 {% for comment in neutral_comments_saved %}
                     <li>{{ comment }}</li>
@@ -55,13 +146,65 @@
             </ul>
         </div>
     </div>
-    <!-- Add this section to display the summarized comments -->
-     
 
-    <div class="word-cloud-section">
-        <h2>Word Cloud</h2>
-        <img src="{{ word_cloud_url }}" alt="Word Cloud" class="word-cloud-img">
-        <p><a href="{{ word_cloud_download_url }}" download>Download Word Cloud</a></p>
-    </div>
+    
+    <script>
+        // JavaScript code to handle downloading positive comments
+        document.getElementById('positive-comments-heading').addEventListener('click', function() {
+            var positiveComments = document.querySelectorAll('.positive');
+            var content = '';
+            positiveComments.forEach(function(comment) {
+                content += comment.textContent.trim() + '\n';
+            });
+
+            var blob = new Blob([content], { type: 'text/plain' });
+            var link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = 'positive_comments.txt';
+            link.click();
+        });
+        // JavaScript code to handle downloading positive comments
+        document.getElementById('negative-comments-heading').addEventListener('click', function() {
+            var negativeComments = document.querySelectorAll('.negative');
+            var content = '';
+            negativeComments.forEach(function(comment) {
+                content += comment.textContent.trim() + '\n';
+            });
+
+            var blob = new Blob([content], { type: 'text/plain' });
+            var link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = 'negative_comments.txt';
+            link.click();
+        });
+        // JavaScript code to handle downloading positive comments
+        document.getElementById('question-comments-heading').addEventListener('click', function() {
+            var questionComments = document.querySelectorAll('.question');
+            var content = '';
+            questionComments.forEach(function(comment) {
+                content += comment.textContent.trim() + '\n';
+            });
+
+            var blob = new Blob([content], { type: 'text/plain' });
+            var link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = 'question_comments.txt';
+            link.click();
+        });
+        // JavaScript code to handle downloading positive comments
+        document.getElementById('neutral-comments-heading').addEventListener('click', function() {
+            var neutralComments = document.querySelectorAll('.neutral');
+            var content = '';
+            neutralComments.forEach(function(comment) {
+                content += comment.textContent.trim() + '\n';
+            });
+
+            var blob = new Blob([content], { type: 'text/plain' });
+            var link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = 'neutral_comments.txt';
+            link.click();
+        });
+    </script>
 </body>
 </html>
